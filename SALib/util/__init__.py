@@ -87,6 +87,10 @@ def nonuniform_scale_samples(params, bounds, dists):
                     lower bound assumed to be zero
             norm: normal distribution with mean and standard deviation
             lognorm: lognormal with ln-space mean and standard deviation
+            isotriang: isosceles triangular distribution
+                       lower and upper bounds  (peak = 0.5%)
+            gumbel: gumbel distribution with mode and scale
+            weibull: weibull distribution with shape and scale
     """
     b = np.array(bounds)
 
@@ -123,7 +127,7 @@ def nonuniform_scale_samples(params, bounds, dists):
                     params[:, i], loc=b1, scale=b2)
 
         # lognormal distribution (ln-space, not base-10)
-        # paramters are ln-space mean and standard deviation
+        # parameters are ln-space mean and standard deviation
         elif dists[i] == 'lognorm':
             # checking for valid parameters
             if b2 <= 0:
@@ -133,8 +137,45 @@ def nonuniform_scale_samples(params, bounds, dists):
                 conv_params[:, i] = np.exp(
                     sp.stats.norm.ppf(params[:, i], loc=b1, scale=b2))
 
+        # isosceles triangular distribution
+        # parameters are the location of the lower and upper bounds (peak=0.5%)
+        elif dists[i] == 'isotriang':
+            # checking for valid parameters
+            if b1 >= b2:
+                raise ValueError('''Isosceles triangular distribution: lower
+                    bound must be less than upper bound''')
+            else:
+                conv_params[:, i] = sp.stats.triang.ppf(
+                    params[:, i], c=0.5, scale=b2 - b1, loc=b1)
+
+        # gumbel distribution
+        # parameters are the location of the mode and the scale
+        elif dists[i] == 'gumbel':
+            # checking for valid parameters
+            if b2 <= 0:
+                raise ValueError(
+                    '''Gumbel distribution: scale must be > 0''')
+            else:
+                conv_params[:, i] = sp.stats.gumbel_r.ppf(
+                    params[:, i], loc=b1, scale=b2)
+
+        # weibull distribution
+        # parameters are the shape and the scale of the distribution
+        elif dists[i] == 'weibull':
+            # checking for valid parameters
+            if b1 <= 0:
+                raise ValueError(
+                    '''Weibull distribution: shape must be > 0''')
+            elif b2 <= 0:
+                raise ValueError(
+                    '''Weibull distribution: scale must be > 0''')
+            else:
+                conv_params[:, i] = sp.stats.weibull_min.ppf(
+                    params[:, i], c=b1, scale=b2)
+
         else:
-            valid_dists = ['unif', 'triang', 'norm', 'lognorm']
+            valid_dists = ['unif', 'triang', 'norm', 'lognorm',
+                           'isotriang', 'gumbel', 'weibull']
             raise ValueError('Distributions: choose one of %s' %
                              ", ".join(valid_dists))
 
