@@ -102,6 +102,8 @@ def nonuniform_scale_samples(params, bounds, dists):
         # setting first and second arguments for distributions
         b1 = b[i][0]
         b2 = b[i][1]
+        lower = b[i][2] if len(b[i]) > 2 else -np.inf
+        upper = b[i][3] if len(b[i]) > 3 else np.inf
 
         if dists[i] == 'triang':
             # checking for correct parameters
@@ -178,6 +180,8 @@ def nonuniform_scale_samples(params, bounds, dists):
                            'isotriang', 'gumbel', 'weibull']
             raise ValueError('Distributions: choose one of %s' %
                              ", ".join(valid_dists))
+
+        conv_params[:, i] = np.clip(conv_params[:, i], lower, upper)
 
     return conv_params
 
