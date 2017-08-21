@@ -17,8 +17,62 @@ from . import common_args
 from ..util import read_param_file
 
 
+# https://github.com/cran/sensitivity/blob/master/R/shapleyPermEx.R
+# https://rdrr.io/cran/sensitivity/man/shapleyPermEx.html
+# http://mathesaurus.sourceforge.net/r-numpy.html
 
-def sample()
+def sample(problem, x_all_fn, x_set_fn, Nv, No, Ni):
+    """Generates model inputs for computation of Shapley effects.
+
+    Returns a NumPy matrix containing the model inputs. These model inputs are
+    intended to be used with :func:`SALib.analyze.shapley.analyze`.
+
+    Parameters
+    ----------
+    problem : dict
+        The problem definition
+    x_all_fn : (n) -> NumPy array
+        A function to generate a n-sample of a d-dimensional input vector
+    x_set_fn : (n, Sj, Sjc, xjc) -> NumPy array
+        A function to generate a n- sample an input vector corresponding to the
+        indices in Sj conditional on the input values xjc with the index set Sjc
+    Nv : int
+        Monte Carlo (MC) sample size to estimate the output variance
+    No : int
+        Output MC sample size to estimate the cost function
+    Ni : int
+        Inner MC sample size to estimate the cost function
+    """
+
+    D = problem['num_vars']
+
+    perms = np.asarray(list(itertools.permutations(range(0, D))))
+    m = perms.shape[0]
+
+    X = np.empty([Nv + m * (D - 1) * No * Ni, D])
+    X[:Nv, :] = x_all_fn(Nv)
+
+    for p in range(0, m):
+        pi = perms[p]
+        pi_s = np.argsort(pi)
+
+        for j in range(0, d - 1):
+            Sj = pi[:j]  # set of the 1st-jth elements in pi
+            Sjc = pi[j:]  # set of the (j+1)th-dth elements in pi
+
+            xjcM = np.reshape(x_set_fn(No, Sjc, None, None), [No, -1])  # sampled values of the inputs in Sjc
+            for l in range(0, No):
+                xjc = xjcM[l]
+
+                # sample values of inputs in Sj conditional on xjc
+                xj = x_set_fn(Ni, Sj, Sjc, xjc)
+                # xx <- cbind(xj, matrix(xjc,nrow=Ni,ncol=length(xjc),byrow=T))
+                xx = np.concatenate((xj, np.reshape(xjc, [Ni, -1])), axis=1)
+                # X[(Nv+(p-1)*(d-1)*No*Ni+(j-1)*No*Ni+(l-1)*Ni+1):(Nv+(p-1)*(d-1)*No*Ni+(j-1)*No*Ni+l*Ni),] <- xx[,pi_s]
+                X[ Nv + (p)*(d-1)*No*Ni + (j)*No*Ni+(l)*Ni + 1: Nv + (p)*(d)*No*Ni + (j)*No*Ni+l*Ni, :] = xx[:, pi_s]
+
+    return X
+
 
 def analyze(problem,
             X, Y, x_all_fn, x_set_fn, Nv, No, Ni,
