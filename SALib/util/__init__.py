@@ -87,6 +87,10 @@ def nonuniform_scale_samples(params, bounds, dists):
                     lower bound assumed to be zero
             norm: normal distribution with mean and standard deviation
             lognorm: lognormal with ln-space mean and standard deviation
+            isotriang: isosceles triangular distribution
+                       lower and upper bounds  (peak = 0.5%)
+            gumbel: gumbel distribution with mode and scale
+            weibull: weibull distribution with shape and scale
     """
     b = np.array(bounds)
 
@@ -98,6 +102,10 @@ def nonuniform_scale_samples(params, bounds, dists):
         # setting first and second arguments for distributions
         b1 = b[i][0]
         b2 = b[i][1]
+        hard_b1 = b[i][2] if len(b[i]) > 2 else np.NAN
+        hard_b2 = b[i][3] if len(b[i]) > 3 else np.NAN
+        lower = 0
+        upper = 1
 
         if dists[i] == 'triang':
             # checking for correct parameters
@@ -119,22 +127,78 @@ def nonuniform_scale_samples(params, bounds, dists):
             if b2 <= 0:
                 raise ValueError('''Normal distribution: stdev must be > 0''')
             else:
+                if hard_b1 != np.NAN:
+                    lower = sp.stats.norm.cdf(hard_b1, loc=b1, scale=b2)
+                if hard_b2 != np.NAN:
+                    upper = sp.stats.norm.cdf(hard_b2, loc=b1, scale=b2)
                 conv_params[:, i] = sp.stats.norm.ppf(
-                    params[:, i], loc=b1, scale=b2)
+                    params[:, i] * (upper - lower) + lower,
+                    loc=b1, scale=b2)
 
         # lognormal distribution (ln-space, not base-10)
-        # paramters are ln-space mean and standard deviation
+        # parameters are ln-space mean and standard deviation
         elif dists[i] == 'lognorm':
             # checking for valid parameters
             if b2 <= 0:
                 raise ValueError(
                     '''Lognormal distribution: stdev must be > 0''')
             else:
+                if hard_b1 != np.NAN:
+                    lower = sp.stats.norm.cdf(hard_b1, loc=b1, scale=b2)
+                if hard_b2 != np.NAN:
+                    upper = sp.stats.norm.cdf(hard_b2, loc=b1, scale=b2)
                 conv_params[:, i] = np.exp(
                     sp.stats.norm.ppf(params[:, i], loc=b1, scale=b2))
 
+        # isosceles triangular distribution
+        # parameters are the location of the lower and upper bounds (peak=0.5%)
+        elif dists[i] == 'isotriang':
+            # checking for valid parameters
+            if b1 >= b2:
+                raise ValueError('''Isosceles triangular distribution: lower
+                    bound must be less than upper bound''')
+            else:
+                conv_params[:, i] = sp.stats.triang.ppf(
+                    params[:, i], c=0.5, scale=b2 - b1, loc=b1)
+
+        # gumbel distribution
+        # parameters are the location of the mode and the scale
+        elif dists[i] == 'gumbel':
+            # checking for valid parameters
+            if b2 <= 0:
+                raise ValueError(
+                    '''Gumbel distribution: scale must be > 0''')
+            else:
+                if hard_b1 != np.NAN:
+                    lower = sp.stats.gumbel_r.cdf(hard_b1, loc=b1, scale=b2)
+                if hard_b2 != np.NAN:
+                    upper = sp.stats.gumbel_r.cdf(hard_b2, loc=b1, scale=b2)
+                conv_params[:, i] = sp.stats.gumbel_r.ppf(
+                    params[:, i] * (upper - lower) + lower,
+                    loc=b1, scale=b2)
+
+        # weibull distribution
+        # parameters are the shape and the scale of the distribution
+        elif dists[i] == 'weibull':
+            # checking for valid parameters
+            if b1 <= 0:
+                raise ValueError(
+                    '''Weibull distribution: shape must be > 0''')
+            elif b2 <= 0:
+                raise ValueError(
+                    '''Weibull distribution: scale must be > 0''')
+            else:
+                if hard_b1 != np.NAN:
+                    lower = sp.stats.weibull_min.cdf(hard_b1, c=b1, scale=b2)
+                if hard_b2 != np.NAN:
+                    upper = sp.stats.weibull_min.cdf(hard_b2, c=b1, scale=b2)
+                conv_params[:, i] = sp.stats.weibull_min.ppf(
+                    params[:, i] * (upper - lower) + lower,
+                    c=b1, scale=b2)
+
         else:
-            valid_dists = ['unif', 'triang', 'norm', 'lognorm']
+            valid_dists = ['unif', 'triang', 'norm', 'lognorm',
+                           'isotriang', 'gumbel', 'weibull']
             raise ValueError('Distributions: choose one of %s' %
                              ", ".join(valid_dists))
 
