@@ -1,9 +1,3 @@
-#################################################################################
-  # Authors: 
-  # First version by: Eunhye Song, Barry L. Nelson, Jeremy Staum (Northwestern University), 2015
-  # Modified for 'sensitivity' package by: Bertrand Iooss (EDF R&D), 2017
-#################################################################################
-
 from __future__ import division
 from __future__ import print_function
 
@@ -11,80 +5,27 @@ import itertools
 
 import numpy as np
 
-from scipy.stats import norm, gaussian_kde, rankdata
+# from scipy.stats import norm, gaussian_kde, rankdata
 
-from . import common_args
-from ..util import read_param_file
+# from . import common_args
+# from ..util import read_param_file
 
-
-# https://github.com/cran/sensitivity/blob/master/R/shapleyPermEx.R
-# https://rdrr.io/cran/sensitivity/man/shapleyPermEx.html
-# http://mathesaurus.sourceforge.net/r-numpy.html
-
-
-# Xall <- function(n) matrix(runif(d*n,-pi,pi),nc=d)
-def x_all_fn(n):
-    return np.random.rand([n, d]) * 2 * np.pi - np.pi
-
-
-def x_set_fn(n, Sj, Sjc, xjc):
-    return np.random.rand([n, Sj]) * 2 * np.pi - np.pi
-
-
-def sample(problem, x_all_fn, x_set_fn, Nv, No, Ni):
-    """Generates model inputs for computation of Shapley effects.
-
-    Returns a NumPy matrix containing the model inputs. These model inputs are
-    intended to be used with :func:`SALib.analyze.shapley.analyze`.
-
-    Parameters
-    ----------
-    problem : dict
-        The problem definition
-    x_all_fn : (n) -> NumPy array
-        A function to generate a n-sample of a d-dimensional input vector
-    x_set_fn : (n, Sj, Sjc, xjc) -> NumPy array
-        A function to generate a n- sample an input vector corresponding to the
-        indices in Sj conditional on the input values xjc with the index set Sjc
-    Nv : int
-        Monte Carlo (MC) sample size to estimate the output variance
-    No : int
-        Output MC sample size to estimate the cost function
-    Ni : int
-        Inner MC sample size to estimate the cost function
-    """
-
-    D = problem['num_vars']
-
-    perms = np.asarray(list(itertools.permutations(range(0, D))))
-    m = perms.shape[0]
-    X = np.empty([Nv + m * (D - 1) * No * Ni, D])
-    X[:Nv, :] = x_all_fn(Nv, D)
-
-    for p in range(0, m):
-        pi = perms[p]
-        pi_s = np.argsort(pi)
-
-        for j in range(1, D - 1):
-            Sj = pi[0:j]  # set of the 1st-jth elements in pi
-            Sjc = pi[j:]  # set of the (j+1)th-dth elements in pi
-
-            xjcM = np.reshape(x_set_fn(No, Sjc, None, None), [No, -1])  # sampled values of the inputs in Sjc
-            for l in range(0, No):
-                xjc = xjcM[l]
-
-                # sample values of inputs in Sj conditional on xjc
-                xj = x_set_fn(Ni, Sj, Sjc, xjc)
-                xx = np.concatenate((xj, np.ones([Ni, len(xjc)]) * xjc), axis=1)
-                start = Nv + (p)*(D-1)*No*Ni + (j-1)*No*Ni+(l)*Ni
-                end = Nv + (p)*(D-1)*No*Ni + (j-1)*No*Ni+(l+1)*Ni
-                X[start:end, :] = xx[:, pi_s]
-
-    return X
+#
+#   Source code adapted from R 'sensitivity' package:
+#       https://github.com/cran/sensitivity/blob/master/R/shapleyPermEx.R
+#
+#   Authors:
+#
+#     * First version by:
+#           Eunhye Song, Barry L. Nelson, Jeremy Staum (Northwestern University), 2015
+#     * Modified for R 'sensitivity' package by:
+#           Bertrand Iooss (EDF R&D), 2017
+#     * Adapted for Python 'SALib' package by:
+#           Enrique G. Paredes <egparedes@ifi.uzh.ch> (VMMLab, University of Zurich), 2017
+#
 
 
-def analyze(problem, X, Y, perms, Nv, No, Ni,
-            print_to_console=False):
+def analyze(problem, X, Y, N_v, N_o, N_i, print_to_console=False):
     """Perform Shapley effects analysis on model outputs.
 
     Returns a dictionary with keys 'mu', 'sigma' and 'Sh', 'S1', 'ST' where
@@ -99,8 +40,12 @@ def analyze(problem, X, Y, perms, Nv, No, Ni,
         A NumPy matrix containing the model inputs
     Y : numpy.array
         A NumPy array containing the model outputs
-    Nv : int
-        Monte Carlo (MC) sample size to estimate the output variance
+    N_v : int
+        Used Monte Carlo (MC) sample size to estimate the output variance
+    N_o : int
+        Used output MC sample size to estimate the cost function
+    N_i : int
+        Used inner MC sample size to estimate the cost function
     print_to_console : bool
         Print results directly to console (default False)
 
@@ -127,78 +72,112 @@ def analyze(problem, X, Y, perms, Nv, No, Ni,
 
     Examples
     --------
-    >>> X = shapley.sample(problem, 1000)
+    >>> problem = dict(num_vars=3, names=['x1', 'x2', 'x3'])
+    >>> N_v, N_o, N_i = 10000, 1000, 3
+    >>> X = shapley.sample(problem, N_v=N_v, N_o=N_o, N_i=N_i)
     >>> Y = Ishigami.evaluate(X)
-    >>> Si = shapley.analyze(problem, X, Y, print_to_console=True)
+    >>> Si = shapley.analyze(problem, X, Y, N_v=N_v, N_o=N_o, N_i=N_i,
+                             print_to_console=True)
     """
 
     D = problem['num_vars']
+    perms = np.asarray(list(itertools.permutations(range(0, D))))
+    m = perms.shape[0]
 
     # Initialize Shapley value for all players
-    Sh = np.zeros(D)
-    Sh2 = np.zeros(D)
+    shapley_Y = np.zeros(D)
+    # shapley_Y2 = np.zeros(D)
 
     # Initialize main and total (Sobol) effects for all players
-    Vsob = np.zeros(D)
-    # Vsob2 = np.zeros(D)
-    Tsob = np.zeros(D)
-    # Tsob2 = np.zeros(D)
+    sobol_Y = np.zeros(D)
+    # sobol_Y2 = np.zeros(D)
+    tot_sobol_Y = np.zeros(D)
+    # tot_sobol_Y2 = np.zeros(D)
 
     # Estimate Var[Y]
-    EY = np.mean(Y[:Nv])
-    VarY = np.var(Y[:Nv])
-    current_Y_idx = Nv
+    mean_Y = np.mean(Y[:N_v])
+    var_Y = np.var(Y[:N_v], ddof=1)
+    cur_Y_idx = N_v
 
     # Estimate Shapley effects
     m = perms.shape[0]
     for p in range(0, m):
-        pi = perms[p]
-        prevC = 0
+        cur_perm = perms[p]
+        prev_C = 0
         for j in range(0, D):
             if j == D - 1:
-                Chat = VarY
-                Vsob[pi[j]] = Vsob[pi[j]] + prevC  # first order effect
-                # Vsob2[pi[j]] = Vsob2[pi[j]] + prevC**2
+                C_hat = var_Y
+                sobol_Y[cur_perm[j]] = sobol_Y[cur_perm[j]] + prev_C  # first order effect
+                # sobol_Y2[cur_perm[j]] = sobol_Y2[cur_perm[j]] + prev_C**2
             else:
-                cVar = np.zeros(No)
-                for l in range(0, No):
-                    cVar[l] = np.var(Y[current_Y_idx:current_Y_idx + Ni], ddof=1)
-                    current_Y_idx += Ni
+                cVar = np.zeros(N_o)
+                for l in range(0, N_o):
+                    cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
+                    cur_Y_idx += N_i
 
-                Chat = np.mean(cVar)
+                C_hat = np.mean(cVar)
 
-            dele = Chat - prevC
+            dele = C_hat - prev_C
 
-            Sh[pi[j]] = Sh[pi[j]] + dele
-            Sh2[pi[j]] = Sh2[pi[j]] + dele**2
+            shapley_Y[cur_perm[j]] = shapley_Y[cur_perm[j]] + dele
+            # shapley_Y2[cur_perm[j]] = shapley_Y2[cur_perm[j]] + dele**2
 
-            prevC = Chat
+            prev_C = C_hat
 
             if j == 0:
-                Tsob[pi[j]] = Tsob[pi[j]] + Chat  # Total effect
-                # Tsob2[pi[j]] = Tsob2[pi[j]] + Chat**2
+                tot_sobol_Y[cur_perm[j]] = tot_sobol_Y[cur_perm[j]] + C_hat  # Total effect
+                # tot_sobol_Y2[cur_perm[j]] = tot_sobol_Y2[cur_perm[j]] + C_hat**2
 
-    Sh = Sh / m / VarY
-    # Sh2 = Sh2 / m / VarY**2
-    # ShSE = np.sqrt((Sh2 - Sh**2) / m)
+    shapley_Y = shapley_Y / m / var_Y
+    # shapley_Y2 = shapley_Y2 / m / var_Y**2
+    # shapley_YSE = np.sqrt((shapley_Y2 - shapley_Y**2) / m)
 
-    Vsob = Vsob / (m/D) / VarY  # averaging by number of permutations with j=d-1
-    # Vsob2 = Vsob2 / (m/D) / VarY**2
-    # VsobSE = np.sqrt((Vsob2 - Vsob**2) / (m/D))
-    Vsob = 1 - Vsob
-    # Vsob2 = 1 - Vsob2
+    sobol_Y = sobol_Y / (m/D) / var_Y  # averaging by number of permutations with j=d-1
+    # sobol_Y2 = sobol_Y2 / (m/D) / var_Y**2
+    # sobol_YSE = np.sqrt((sobol_Y2 - sobol_Y**2) / (m/D))
+    sobol_Y = 1 - sobol_Y
+    # sobol_Y2 = 1 - sobol_Y2
 
-    Tsob = Tsob / (m/D) / VarY  # averaging by number of permutations with j=1
-    # Tsob2 = Tsob2 / (m/D) / VarY**2
-    # TsobSE = np.sqrt((Tsob2 - Tsob**2) / (m/D))
+    tot_sobol_Y = tot_sobol_Y / (m/D) / var_Y  # averaging by number of permutations with j=1
+    # tot_sobol_Y2 = tot_sobol_Y2 / (m/D) / var_Y**2
+    # tot_sobol_YSE = np.sqrt((tot_sobol_Y2 - tot_sobol_Y**2) / (m/D))
 
-    results = dict(mu=EY, sigma=VarY, Sh=Sh, S1=Vsob, ST=Tsob)
+    results = dict(mu=mean_Y, sigma=var_Y, Sh=shapley_Y, S1=sobol_Y, ST=tot_sobol_Y)
 
     if print_to_console:
         for i in range(D):
-            print("[%s] Shapley: %f | Sobol: %f | Total Sobol: %f" % (problem['names'][i], 
+            print("[%s] Shapley: %f | Sobol: %f | Total Sobol: %f" % (problem['names'][i],
                                                                       results['Sh'][i],
                                                                       results['S1'][i],
                                                                       results['ST'][i]))
 
     return results
+
+
+# if __name__ == "__main__":
+#     parser = common_args.create()
+#     parser.add_argument('--max-order', type=int, required=False, default=2,
+#                         choices=[1, 2],
+#                         help='Maximum order of sensitivity indices to '
+#                              'calculate')
+#     parser.add_argument('-r', '--resamples', type=int, required=False,
+#                         default=1000,
+#                         help='Number of bootstrap resamples for Sobol '
+#                              'confidence intervals')
+#     parser.add_argument('--parallel', action='store_true', help='Makes '
+#                         'use of parallelization.',
+#                         dest='parallel')
+#     parser.add_argument('--processors', type=int, required=False,
+#                         default=None,
+#                         help='Number of processors to be used with the ' +
+#                         'parallel option.', dest='n_processors')
+#     args = parser.parse_args()
+
+#     problem = read_param_file(args.paramfile)
+#     Y = np.loadtxt(args.model_output_file, delimiter=args.delimiter,
+#                    usecols=(args.column,))
+
+#     analyze(problem, Y, (args.max_order == 2),
+#             num_resamples=args.resamples, print_to_console=True,
+#             parallel=args.parallel, n_processors=args.n_processors)
+    
