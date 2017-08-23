@@ -21,6 +21,16 @@ from ..util import read_param_file
 # https://rdrr.io/cran/sensitivity/man/shapleyPermEx.html
 # http://mathesaurus.sourceforge.net/r-numpy.html
 
+
+# Xall <- function(n) matrix(runif(d*n,-pi,pi),nc=d)
+def x_all_fn(n):
+    return np.random.rand([n, d]) * 2 * np.pi - np.pi
+
+
+def x_set_fn(n, Sj, Sjc, xjc):
+    return np.random.rand([n, Sj]) * 2 * np.pi - np.pi
+
+
 def sample(problem, x_all_fn, x_set_fn, Nv, No, Ni):
     """Generates model inputs for computation of Shapley effects.
 
@@ -48,16 +58,15 @@ def sample(problem, x_all_fn, x_set_fn, Nv, No, Ni):
 
     perms = np.asarray(list(itertools.permutations(range(0, D))))
     m = perms.shape[0]
-
     X = np.empty([Nv + m * (D - 1) * No * Ni, D])
-    X[:Nv, :] = x_all_fn(Nv)
+    X[:Nv, :] = x_all_fn(Nv, D)
 
     for p in range(0, m):
         pi = perms[p]
         pi_s = np.argsort(pi)
 
-        for j in range(0, d - 1):
-            Sj = pi[:j]  # set of the 1st-jth elements in pi
+        for j in range(1, D - 1):
+            Sj = pi[0:j]  # set of the 1st-jth elements in pi
             Sjc = pi[j:]  # set of the (j+1)th-dth elements in pi
 
             xjcM = np.reshape(x_set_fn(No, Sjc, None, None), [No, -1])  # sampled values of the inputs in Sjc
@@ -66,16 +75,15 @@ def sample(problem, x_all_fn, x_set_fn, Nv, No, Ni):
 
                 # sample values of inputs in Sj conditional on xjc
                 xj = x_set_fn(Ni, Sj, Sjc, xjc)
-                # xx <- cbind(xj, matrix(xjc,nrow=Ni,ncol=length(xjc),byrow=T))
-                xx = np.concatenate((xj, np.reshape(xjc, [Ni, -1])), axis=1)
-                # X[(Nv+(p-1)*(d-1)*No*Ni+(j-1)*No*Ni+(l-1)*Ni+1):(Nv+(p-1)*(d-1)*No*Ni+(j-1)*No*Ni+l*Ni),] <- xx[,pi_s]
-                X[ Nv + (p)*(d-1)*No*Ni + (j)*No*Ni+(l)*Ni + 1: Nv + (p)*(d)*No*Ni + (j)*No*Ni+l*Ni, :] = xx[:, pi_s]
+                xx = np.concatenate((xj, np.ones([Ni, len(xjc)]) * xjc), axis=1)
+                start = Nv + (p)*(D-1)*No*Ni + (j-1)*No*Ni+(l)*Ni
+                end = Nv + (p)*(D-1)*No*Ni + (j-1)*No*Ni+(l+1)*Ni
+                X[start:end, :] = xx[:, pi_s]
 
     return X
 
 
-def analyze(problem,
-            X, Y, x_all_fn, x_set_fn, Nv, No, Ni,
+def analyze(problem, X, Y, perms, Nv, No, Ni,
             print_to_console=False):
     """Perform Shapley effects analysis on model outputs.
 
@@ -91,17 +99,8 @@ def analyze(problem,
         A NumPy matrix containing the model inputs
     Y : numpy.array
         A NumPy array containing the model outputs
-    x_all_fn: (n) -> NumPy array
-        A function to generate a n-sample of a d-dimensional input vector
-    x_set_fn: (n, Sj, Sjc, xjc) -> NumPy array
-        A function to generate a n- sample an input vector corresponding to the
-        indices in Sj conditional on the input values xjc with the index set Sjc
-    Nv: int
+    Nv : int
         Monte Carlo (MC) sample size to estimate the output variance
-    No: int
-        Output MC sample size to estimate the cost function
-    Ni: int
-        Inner MC sample size to estimate the cost function
     print_to_console : bool
         Print results directly to console (default False)
 
@@ -128,37 +127,78 @@ def analyze(problem,
 
     Examples
     --------
-    >>> X = latin.sample(problem, 1000)
+    >>> X = shapley.sample(problem, 1000)
     >>> Y = Ishigami.evaluate(X)
-    >>> Si = delta.analyze(problem, X, Y, print_to_console=True)
+    >>> Si = shapley.analyze(problem, X, Y, print_to_console=True)
     """
 
     D = problem['num_vars']
-    N = Y.size
 
-    perms = np.asarray(list(itertools.permutations(range(0, 4))))
+    # Initialize Shapley value for all players
+    Sh = np.zeros(D)
+    Sh2 = np.zeros(D)
+
+    # Initialize main and total (Sobol) effects for all players
+    Vsob = np.zeros(D)
+    # Vsob2 = np.zeros(D)
+    Tsob = np.zeros(D)
+    # Tsob2 = np.zeros(D)
+
+    # Estimate Var[Y]
+    EY = np.mean(Y[:Nv])
+    VarY = np.var(Y[:Nv])
+    current_Y_idx = Nv
+
+    # Estimate Shapley effects
     m = perms.shape[0]
+    for p in range(0, m):
+        pi = perms[p]
+        prevC = 0
+        for j in range(0, D):
+            if j == D - 1:
+                Chat = VarY
+                Vsob[pi[j]] = Vsob[pi[j]] + prevC  # first order effect
+                # Vsob2[pi[j]] = Vsob2[pi[j]] + prevC**2
+            else:
+                cVar = np.zeros(No)
+                for l in range(0, No):
+                    cVar[l] = np.var(Y[current_Y_idx:current_Y_idx + Ni], ddof=1)
+                    current_Y_idx += Ni
 
-    values = np.empty([])
-    X <- matrix(NA, ncol=d, nrow=Nv+m*(d-1)*No*Ni)
-    X[1:Nv,] <- Xall(Nv)
+                Chat = np.mean(cVar)
 
+            dele = Chat - prevC
 
+            Sh[pi[j]] = Sh[pi[j]] + dele
+            Sh2[pi[j]] = Sh2[pi[j]] + dele**2
 
+            prevC = Chat
 
-    keys = ('mu', 'sigma', 'Sh', 'S1', 'ST')
-    S = dict((k, np.zeros(D)) for k in keys)
-    # if print_to_console:
-    #     print("Parameter %s %s %s %s" % keys)
+            if j == 0:
+                Tsob[pi[j]] = Tsob[pi[j]] + Chat  # Total effect
+                # Tsob2[pi[j]] = Tsob2[pi[j]] + Chat**2
 
-    # for i in range(D):
-    #     S['delta'][i], S['delta_conf'][i] = bias_reduced_delta(
-    #         Y, Ygrid, X[:, i], m, num_resamples, conf_level)
-    #     S['S1'][i] = sobol_first(Y, X[:, i], m)
-    #     S['S1_conf'][i] = sobol_first_conf(
-    #         Y, X[:, i], m, num_resamples, conf_level)
-    #     if print_to_console:
-    #         print("%s %f %f %f %f" % (problem['names'][i], S['delta'][
-    #               i], S['delta_conf'][i], S['S1'][i], S['S1_conf'][i]))
+    Sh = Sh / m / VarY
+    # Sh2 = Sh2 / m / VarY**2
+    # ShSE = np.sqrt((Sh2 - Sh**2) / m)
 
-    return S
+    Vsob = Vsob / (m/D) / VarY  # averaging by number of permutations with j=d-1
+    # Vsob2 = Vsob2 / (m/D) / VarY**2
+    # VsobSE = np.sqrt((Vsob2 - Vsob**2) / (m/D))
+    Vsob = 1 - Vsob
+    # Vsob2 = 1 - Vsob2
+
+    Tsob = Tsob / (m/D) / VarY  # averaging by number of permutations with j=1
+    # Tsob2 = Tsob2 / (m/D) / VarY**2
+    # TsobSE = np.sqrt((Tsob2 - Tsob**2) / (m/D))
+
+    results = dict(mu=EY, sigma=VarY, Sh=Sh, S1=Vsob, ST=Tsob)
+
+    if print_to_console:
+        for i in range(D):
+            print("[%s] Shapley: %f | Sobol: %f | Total Sobol: %f" % (problem['names'][i], 
+                                                                      results['Sh'][i],
+                                                                      results['S1'][i],
+                                                                      results['ST'][i]))
+
+    return results
