@@ -75,7 +75,7 @@ def sample_ex(problem, N_v, N_o, N_i,
     assert problem.get('groups', None) is None
 
     D = problem['num_vars']
-    perms = np.asarray(list(itertools.permutations(range(0, D))))
+    perms = np.asarray(list(itertools.permutations(range(D))))
     m = perms.shape[0]
     X = np.empty([N_v + m * (D - 1) * N_o * N_i, D])
     X[:N_v, :] = joint_pdf_rand_fn(N_v)
@@ -84,12 +84,12 @@ def sample_ex(problem, N_v, N_o, N_i,
         cur_perm = perms[p]
         cur_perm_s = np.argsort(cur_perm)
 
-        for j in range(1, D - 1):
+        for j in range(1, D):
             S_j = cur_perm[0:j]  # set of the 1st-jth elements in cur_perm
             cS_j = cur_perm[j:]  # set of the (j+1)th-dth elements in cur_perm
             cMx_j = cond_pdf_rand_fn(N_o, cS_j, None, None)  # sampled values of the inputs in cS_j
 
-            for l in range(0, N_o):
+            for l in range(N_o):
                 cx_j = cMx_j[l]
 
                 # sample values of inputs in S_j conditional on cx_j
@@ -166,12 +166,12 @@ def sample_rand(problem, m, N_v, N_o, N_i,
         cur_perm = perms[p]
         cur_perm_s = np.argsort(cur_perm)
 
-        for j in range(1, D - 1):
+        for j in range(1, D):
             S_j = cur_perm[0:j]  # set of the 1st-jth elements in cur_perm
             cS_j = cur_perm[j:]  # set of the (j+1)th-dth elements in cur_perm
             cMx_j = cond_pdf_rand_fn(N_o, cS_j, None, None)  # sampled values of the inputs in cS_j
 
-            for l in range(0, N_o):
+            for l in range(N_o):
                 cx_j = cMx_j[l]
 
                 # sample values of inputs in S_j conditional on cx_j

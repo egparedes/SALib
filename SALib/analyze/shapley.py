@@ -82,7 +82,7 @@ def analyze_ex(problem, X, Y, N_v, N_o, N_i, print_to_console=False):
     """
 
     D = problem['num_vars']
-    perms = np.asarray(list(itertools.permutations(range(0, D))))
+    perms = np.asarray(list(itertools.permutations(range(D))))
 
     # Initialize Shapley value for all players
     shapley_Y = np.zeros(D)
@@ -101,17 +101,17 @@ def analyze_ex(problem, X, Y, N_v, N_o, N_i, print_to_console=False):
 
     # Estimate Shapley effects
     m = perms.shape[0]
-    for p in range(0, m):
+    for p in range(m):
         cur_perm = perms[p]
         prev_C = 0
-        for j in range(0, D):
+        for j in range(D):
             if j == D - 1:
                 C_hat = var_Y
                 sobol_Y[cur_perm[j]] = sobol_Y[cur_perm[j]] + prev_C  # first order effect
                 # sobol_Y2[cur_perm[j]] = sobol_Y2[cur_perm[j]] + prev_C**2
             else:
                 cVar = np.zeros(N_o)
-                for l in range(0, N_o):
+                for l in range(N_o):
                     cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
                     cur_Y_idx += N_i
 
@@ -233,10 +233,10 @@ def analyze_rand(problem, X, Y, perms, N_v, N_o, N_i, print_to_console=False):
 
     # Estimate Shapley effects
     m = perms.shape[0]
-    for p in range(0, m):
+    for p in range(m):
         cur_perm = perms[p]
         prev_C = 0
-        for j in range(0, D):
+        for j in range(D):
             if j == D - 1:
                 C_hat = var_Y
                 sobol_Y[cur_perm[j]] = sobol_Y[cur_perm[j]] + prev_C  # first order effect
@@ -244,7 +244,7 @@ def analyze_rand(problem, X, Y, perms, N_v, N_o, N_i, print_to_console=False):
                 n_samples_sobol[cur_perm[j]] += 1
             else:
                 cVar = np.zeros(N_o)
-                for l in range(0, N_o):
+                for l in range(N_o):
                     cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
                     cur_Y_idx += N_i
 
