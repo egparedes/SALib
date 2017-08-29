@@ -91,7 +91,6 @@ def sample_ex(problem, N_v, N_o, N_i,
 
             for l in range(N_o):
                 cx_j = cMx_j[l]
-
                 # sample values of inputs in S_j conditional on cx_j
                 xj = cond_pdf_rand_fn(N_i, S_j, cS_j, cx_j)
                 xx = np.concatenate((xj, np.ones([N_i, len(cx_j)]) * cx_j), axis=1)
@@ -173,7 +172,6 @@ def sample_rand(problem, m, N_v, N_o, N_i,
 
             for l in range(N_o):
                 cx_j = cMx_j[l]
-
                 # sample values of inputs in S_j conditional on cx_j
                 xj = cond_pdf_rand_fn(N_i, S_j, cS_j, cx_j)
                 xx = np.concatenate((xj, np.ones([N_i, len(cx_j)]) * cx_j), axis=1)

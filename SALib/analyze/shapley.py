@@ -110,18 +110,18 @@ def analyze_ex(problem, X, Y, N_v, N_o, N_i, print_to_console=False):
                 sobol_Y[cur_perm[j]] = sobol_Y[cur_perm[j]] + prev_C  # first order effect
                 # sobol_Y2[cur_perm[j]] = sobol_Y2[cur_perm[j]] + prev_C**2
             else:
-                cVar = np.zeros(N_o)
-                for l in range(N_o):
-                    cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
-                    cur_Y_idx += N_i
-
+                Y_subset = Y[cur_Y_idx:cur_Y_idx + N_o * N_i].reshape(N_o, N_i)
+                cVar = np.var(Y_subset, ddof=1, axis=1)
+                cur_Y_idx += N_o * N_i
+                # cVar = np.zeros(N_o)
+                # for l in range(N_o):
+                #     cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
+                #     cur_Y_idx += N_i
                 C_hat = np.mean(cVar)
 
             dele = C_hat - prev_C
-
             shapley_Y[cur_perm[j]] = shapley_Y[cur_perm[j]] + dele
             # shapley_Y2[cur_perm[j]] = shapley_Y2[cur_perm[j]] + dele**2
-
             prev_C = C_hat
 
             if j == 0:
@@ -243,18 +243,18 @@ def analyze_rand(problem, X, Y, perms, N_v, N_o, N_i, print_to_console=False):
                 # sobol_Y2[cur_perm[j]] = sobol_Y2[cur_perm[j]] + prev_C**2
                 n_samples_sobol[cur_perm[j]] += 1
             else:
-                cVar = np.zeros(N_o)
-                for l in range(N_o):
-                    cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
-                    cur_Y_idx += N_i
-
+                Y_subset = Y[cur_Y_idx:cur_Y_idx + N_o * N_i].reshape(N_o, N_i)
+                cVar = np.var(Y_subset, ddof=1, axis=1)
+                cur_Y_idx += N_o * N_i
+                # cVar = np.zeros(N_o)
+                # for l in range(N_o):
+                #     cVar[l] = np.var(Y[cur_Y_idx:cur_Y_idx + N_i], ddof=1)
+                #     cur_Y_idx += N_i
                 C_hat = np.mean(cVar)
 
             dele = C_hat - prev_C
-
             shapley_Y[cur_perm[j]] = shapley_Y[cur_perm[j]] + dele
             # shapley_Y2[cur_perm[j]] = shapley_Y2[cur_perm[j]] + dele**2
-
             prev_C = C_hat
 
             if j == 0:
