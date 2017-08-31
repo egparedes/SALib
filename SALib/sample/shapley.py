@@ -26,7 +26,7 @@ import scipy as sp
 
 
 def sample_ex(problem, N_v, N_o, N_i,
-              joint_pdf_rand_fn, cond_pdf_rand_fn):
+              joint_rand_fn, cond_rand_fn):
     """Generates model inputs for computation of Shapley effects.
 
     Returns a NumPy matrix containing the model inputs. The resulting matrix
@@ -43,10 +43,10 @@ def sample_ex(problem, N_v, N_o, N_i,
         Output MC sample size to estimate the cost function
     N_i : int
         Inner MC sample size to estimate the cost function
-    joint_pdf_rand_fn : lambda n, d: numpy.matrix([n, d])
+    joint_rand_fn : lambda n, d: numpy.matrix([n, d])
         A function to generate a matrix with n samples (in rows) from the
         D-dimensional input joint PDF
-    cond_pdf_rand_fn : lambda n, dep_idx_set, given_idx_set, given_values: numpy.matrix([n, len(dep_idx_set)])
+    cond_rand_fn : lambda n, dep_idx_set, given_idx_set, given_values: numpy.matrix([n, len(dep_idx_set)])
         A function to generate a matrix with n samples (in rows) from the
         len(dep_idx_set)-dimensional conditional PDF when given_idx_set take given_values
 
@@ -78,31 +78,27 @@ def sample_ex(problem, N_v, N_o, N_i,
     perms = np.asarray(list(itertools.permutations(range(D))))
     m = perms.shape[0]
     X = np.empty([N_v + m * (D - 1) * N_o * N_i, D])
-    X[:N_v, :] = joint_pdf_rand_fn(N_v)
+    X[:N_v, :] = joint_rand_fn(N_v)
 
     for p in range(m):
         cur_perm = perms[p]
-        cur_perm_s = np.argsort(cur_perm)
 
         for j in range(1, D):
-            S_j = cur_perm[0:j]  # set of the 1st-jth elements in cur_perm
+            S_j = cur_perm[:j]  # set of the 1st-jth elements in cur_perm
             cS_j = cur_perm[j:]  # set of the (j+1)th-dth elements in cur_perm
-            cMx_j = cond_pdf_rand_fn(N_o, cS_j, None, None)  # sampled values of the inputs in cS_j
+            cMx_j = joint_rand_fn(N_o, columns_set=cS_j)  # sampled values of the inputs in cS_j
 
+            idx = N_v + N_o * N_i * (p * (D - 1) + (j - 1))
             for l in range(N_o):
                 cx_j = cMx_j[l]
                 # sample values of inputs in S_j conditional on cx_j
-                xj = cond_pdf_rand_fn(N_i, S_j, cS_j, cx_j)
-                xx = np.concatenate((xj, np.ones([N_i, len(cx_j)]) * cx_j), axis=1)
-                start = N_v + (p)*(D-1)*N_o*N_i + (j-1)*N_o*N_i+(l)*N_i
-                end = N_v + (p)*(D-1)*N_o*N_i + (j-1)*N_o*N_i+(l+1)*N_i
-                X[start:end, :] = xx[:, cur_perm_s]
+                X[idx + l * N_i:idx + (l+1) * N_i, :] = cond_rand_fn(N_i, S_j, cS_j, cx_j)
 
     return X
 
 
 def sample_rand(problem, m, N_v, N_o, N_i,
-                joint_pdf_rand_fn, cond_pdf_rand_fn):
+                joint_rand_fn, cond_rand_fn):
     """Generates model inputs for computation of Shapley effects.
 
     Returns a NumPy matrix containing the model inputs. The resulting matrix
@@ -121,10 +117,10 @@ def sample_rand(problem, m, N_v, N_o, N_i,
         Output MC sample size to estimate the cost function
     N_i : int
         Inner MC sample size to estimate the cost function
-    joint_pdf_rand_fn : lambda n, d: numpy.matrix([n, d])
+    joint_rand_fn : lambda n, d: numpy.matrix([n, d])
         A function to generate a matrix with n samples (in rows) from the
         D-dimensional input joint PDF
-    cond_pdf_rand_fn : lambda n, dep_idx_set, given_idx_set, given_values: numpy.matrix([n, len(dep_idx_set)])
+    cond_rand_fn : lambda n, dep_idx_set, given_idx_set, given_values: numpy.matrix([n, len(dep_idx_set)])
         A function to generate a matrix with n samples (in rows) from the
         len(dep_idx_set)-dimensional conditional PDF when given_idx_set take given_values
 
@@ -151,7 +147,6 @@ def sample_rand(problem, m, N_v, N_o, N_i,
     """
 
     assert problem.get('groups', None) is None
-
     D = problem['num_vars']
     perms = np.empty((m, D), dtype=np.int64)
     dims = np.arange(D)
@@ -159,25 +154,21 @@ def sample_rand(problem, m, N_v, N_o, N_i,
         perms[i] = np.random.permutation(dims)
 
     X = np.empty([N_v + m * (D - 1) * N_o * N_i, D])
-    X[:N_v, :] = joint_pdf_rand_fn(N_v)
+    X[:N_v, :] = joint_rand_fn(N_v)
 
     for p in range(m):
         cur_perm = perms[p]
-        cur_perm_s = np.argsort(cur_perm)
 
         for j in range(1, D):
-            S_j = cur_perm[0:j]  # set of the 1st-jth elements in cur_perm
+            S_j = cur_perm[:j]  # set of the 1st-jth elements in cur_perm
             cS_j = cur_perm[j:]  # set of the (j+1)th-dth elements in cur_perm
-            cMx_j = cond_pdf_rand_fn(N_o, cS_j, None, None)  # sampled values of the inputs in cS_j
+            cMx_j = joint_rand_fn(N_o, columns_set=cS_j)  # sampled values of the inputs in cS_j
 
+            idx = N_v + N_o * N_i * (p * (D - 1) + (j - 1))
             for l in range(N_o):
                 cx_j = cMx_j[l]
                 # sample values of inputs in S_j conditional on cx_j
-                xj = cond_pdf_rand_fn(N_i, S_j, cS_j, cx_j)
-                xx = np.concatenate((xj, np.ones([N_i, len(cx_j)]) * cx_j), axis=1)
-                start = N_v + (p)*(D-1)*N_o*N_i + (j-1)*N_o*N_i+(l)*N_i
-                end = N_v + (p)*(D-1)*N_o*N_i + (j-1)*N_o*N_i+(l+1)*N_i
-                X[start:end, :] = xx[:, cur_perm_s]
+                X[idx + l * N_i:idx + (l+1) * N_i, :] = cond_rand_fn(N_i, S_j, cS_j, cx_j)
 
     return X, perms
 
