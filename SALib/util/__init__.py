@@ -120,8 +120,8 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError('''Triangular distribution: Scale must be
                     greater than zero; peak on interval [0,1]''')
             else:
-                conv_params[:, i] = sp.stats.triang.ppf(
-                    params[:, i], c=b2, scale=b1, loc=0)
+                dist = sp.stats.triang(c=b2, scale=b1, loc=0)
+                conv_params[:, i] = dist.ppf(params[:, i])
 
         elif dists[i] == 'unif':
             if b1 >= b2:
@@ -134,13 +134,12 @@ def nonuniform_scale_samples(params, bounds, dists):
             if b2 <= 0:
                 raise ValueError('''Normal distribution: stdev must be > 0''')
             else:
+                dist = sp.stats.norm(loc=b1, scale=b2)
                 if hard_b1 != -np.inf:
-                    lower = sp.stats.norm.cdf(hard_b1, loc=b1, scale=b2)
+                    lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
-                    upper = sp.stats.norm.cdf(hard_b2, loc=b1, scale=b2)
-                conv_params[:, i] = sp.stats.norm.ppf(
-                    params[:, i] * (upper - lower) + lower,
-                    loc=b1, scale=b2)
+                    upper = dist.cdf(hard_b2)
+                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
 
         # lognormal distribution (ln-space, not base-10)
         # parameters are ln-space mean and standard deviation
@@ -150,12 +149,13 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError(
                     '''Lognormal distribution: stdev must be > 0''')
             else:
+                dist = sp.stats.norm(loc=b1, scale=b2)
                 if hard_b1 != -np.inf:
-                    lower = sp.stats.norm.cdf(hard_b1, loc=b1, scale=b2)
+                    lower = dist.cdf(np.log(hard_b1))
                 if hard_b2 != np.inf:
-                    upper = sp.stats.norm.cdf(hard_b2, loc=b1, scale=b2)
+                    upper = dist.cdf(np.log(hard_b2))
                 conv_params[:, i] = np.exp(
-                    sp.stats.norm.ppf(params[:, i], loc=b1, scale=b2))
+                    dist.ppf(params[:, i] * (upper - lower) + lower))
 
         # isosceles triangular distribution
         # parameters are the location of the lower and upper bounds (peak=0.5%)
@@ -165,8 +165,8 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError('''Isosceles triangular distribution: lower
                     bound must be less than upper bound''')
             else:
-                conv_params[:, i] = sp.stats.triang.ppf(
-                    params[:, i], c=0.5, scale=b2 - b1, loc=b1)
+                dist = sp.stats.triang(c=0.5, scale=b2 - b1, loc=b1)
+                conv_params[:, i] = dist.ppf(params[:, i])
 
         # gumbel distribution
         # parameters are the location of the mode and the scale
@@ -176,13 +176,12 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError(
                     '''Gumbel distribution: scale must be > 0''')
             else:
+                dist = sp.stats.gumbel_r(loc=b1, scale=b2).ppf
                 if hard_b1 != -np.inf:
-                    lower = sp.stats.gumbel_r.cdf(hard_b1, loc=b1, scale=b2)
+                    lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
-                    upper = sp.stats.gumbel_r.cdf(hard_b2, loc=b1, scale=b2)
-                conv_params[:, i] = sp.stats.gumbel_r.ppf(
-                    params[:, i] * (upper - lower) + lower,
-                    loc=b1, scale=b2)
+                    upper = dist.cdf(hard_b2)
+                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
 
         # weibull distribution
         # parameters are the shape and the scale of the distribution
@@ -195,13 +194,12 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError(
                     '''Weibull distribution: scale must be > 0''')
             else:
+                dist = sp.stats.weibull_min(c=b1, scale=b2)
                 if hard_b1 != -np.inf:
-                    lower = sp.stats.weibull_min.cdf(hard_b1, c=b1, scale=b2)
+                    lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
-                    upper = sp.stats.weibull_min.cdf(hard_b2, c=b1, scale=b2)
-                conv_params[:, i] = sp.stats.weibull_min.ppf(
-                    params[:, i] * (upper - lower) + lower,
-                    c=b1, scale=b2)
+                    upper = dist.cdf(hard_b2)
+                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
 
         else:
             valid_dists = ['unif', 'triang', 'norm', 'lognorm',

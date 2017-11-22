@@ -156,9 +156,11 @@ def sample_rand(problem, m, N_v, N_o, N_i,
     X = np.empty([N_v + m * (D - 1) * N_o * N_i, D])
     X[:N_v, :] = joint_rand_fn(N_v)
 
+    print("Generating random queries...")
     for p in range(m):
         cur_perm = perms[p]
-
+        if p % ( m // 100) == 0:
+            print("\r{}% done".format(p // ( m // 100)), end='')
         for j in range(1, D):
             S_j = cur_perm[:j]  # set of the 1st-jth elements in cur_perm
             cS_j = cur_perm[j:]  # set of the (j+1)th-dth elements in cur_perm
