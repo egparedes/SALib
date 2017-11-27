@@ -26,9 +26,9 @@ def analyze(problem, X, Y,
     problem : dict
         The problem definition
     X : numpy.matrix
-        The NumPy matrix containing the model inputs
+        The NumPy matrix containing the model inputs of dtype=float
     Y : numpy.array
-        The NumPy array containing the model outputs
+        The NumPy array containing the model outputs of dtype=float
     num_resamples : int
         The number of resamples used to compute the confidence
         intervals (default 1000)
@@ -73,6 +73,12 @@ def analyze(problem, X, Y,
 
     """
 
+    msg = ("dtype of {} array must be 'float', float32 or float64")
+    if X.dtype not in ['float', 'float32', 'float64']:
+        raise ValueError(msg.format('X'))
+    if Y.dtype not in ['float', 'float32', 'float64']:
+        raise ValueError(msg.format('Y'))
+
     # Assume that there are no groups
     groups = None
 
@@ -84,7 +90,7 @@ def analyze(problem, X, Y,
         num_trajectories = int(Y.size / (num_vars + 1))
     elif problem.get('groups') is not None:
         groups, unique_group_names = compute_groups_matrix(
-            problem['groups'], num_vars)
+            problem['groups'])
         number_of_groups = len(unique_group_names)
         num_trajectories = int(Y.size / (number_of_groups + 1))
     else:

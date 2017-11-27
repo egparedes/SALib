@@ -53,9 +53,13 @@ def sample(problem, N, num_levels, grid_jump, optimal_trajectories=None,
     """Generate model inputs using the Method of Morris
 
     Returns a NumPy matrix containing the model inputs required for Method of
-    Morris.  The resulting matrix has :math:`(D+1)*N` rows and :math:`D`
-    columns, where :math:`D` is the number of parameters.  These model inputs
-    are intended to be used with :func:`SALib.analyze.morris.analyze`.
+    Morris.  The resulting matrix has :math:`(G+1)*T` rows and :math:`D`
+    columns, where :math:`D` is the number of parameters, :math:`G` is the
+    number of groups (if no groups are selected, the number of parameters).
+    :math:`T` is the number of trajectories :math:`N`,
+    or `optimal_trajectories` if selected.
+    These model inputs  are intended to be used with
+    :func:`SALib.analyze.morris.analyze`.
 
     Parameters
     ----------
@@ -79,8 +83,8 @@ def sample(problem, N, num_levels, grid_jump, optimal_trajectories=None,
     -------
     sample : numpy.ndarray
         Returns a numpy.ndarray containing the model inputs required for Method
-        of Morris. The resulting matrix has :math:`(D+1)*N` rows and :math:`D`
-        columns, where :math:`D` is the number of parameters.
+        of Morris. The resulting matrix has :math:`(G/D+1)*N/T` rows and
+        :math:`D` columns, where :math:`D` is the number of parameters.
     """
     if grid_jump >= num_levels:
         raise ValueError("grid_jump must be less than num_levels")
@@ -161,8 +165,9 @@ def _sample_oat(problem, N, num_levels, grid_jump):
 def _sample_groups(problem, N, num_levels, grid_jump):
     """Generate trajectories for groups
 
-    Returns an N(g+1)-by-k array of N trajectories;
-    where g is the number of groups and k is the number of factors
+    Returns an :math:`N(g+1)`-by-:math:`k` array of `N` trajectories,
+    where :math:`g` is the number of groups and :math:`k` is the number
+    of factors
 
     Arguments
     ---------
@@ -179,8 +184,7 @@ def _sample_groups(problem, N, num_levels, grid_jump):
     -------
     numpy.ndarray
     """
-    group_membership, _ = compute_groups_matrix(problem['groups'],
-                                                problem['num_vars'])
+    group_membership, _ = compute_groups_matrix(problem['groups'])
 
     if group_membership is None:
         raise ValueError("Please define the matrix group_membership.")
@@ -346,7 +350,6 @@ def _compute_optimised_trajectories(problem, input_sample, N, k_choices,
         raise ValueError(msg)
 
     num_params = problem['num_vars']
-    groups = compute_groups_matrix(problem['groups'], num_params)
 
     if np.any((input_sample < 0) | (input_sample > 1)):
         raise ValueError("Input sample must be scaled between 0 and 1")
@@ -361,9 +364,14 @@ def _compute_optimised_trajectories(problem, input_sample, N, k_choices,
         # Use brute force approach
         strategy = BruteForce()
 
+    if problem.get('groups'):
+        num_groups = len(set(problem['groups']))
+    else:
+        num_groups = None
+
     context = SampleMorris(strategy)
     output = context.sample(input_sample, N, num_params,
-                            k_choices, groups)
+                            k_choices, num_groups)
 
     return output
 

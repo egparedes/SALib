@@ -235,9 +235,7 @@ def read_param_file(filename, delimiter=None):
         - bounds - a list of lists of lower and upper bounds
         - num_vars - a scalar indicating the number of variables
                      (the length of names)
-        - groups - a tuple containing i) a group matrix assigning parameters to
-                   groups
-                                      ii) a list of unique group names
+        - groups - a list of group names (strings) for each variable
         - dists - a list of distributions for the problem,
                     None if not specified or all uniform
 
@@ -286,9 +284,6 @@ def read_param_file(filename, delimiter=None):
                 else:
                     dists.append(row['dist'])
 
-    # group_matrix, group_names = compute_groups_from_parameter_file(
-    #     groups, num_vars)
-
     if groups == names:
         groups = None
     elif len(set(groups)) == 1:
@@ -304,7 +299,7 @@ def read_param_file(filename, delimiter=None):
             'groups': groups, 'dists': dists}
 
 
-def compute_groups_matrix(groups, num_vars):
+def compute_groups_matrix(groups):
     """Generate matrix which notes factor membership of groups
 
     Computes a k-by-g matrix which notes factor membership of groups
@@ -313,6 +308,11 @@ def compute_groups_matrix(groups, num_vars):
         g is the number of groups
     Also returns a g-length list of unique group_names whose positions
     correspond to the order of groups in the k-by-g matrix
+
+    Arguments
+    ---------
+    groups : list
+        Group names corresponding to each variable
 
     Returns
     -------
@@ -323,6 +323,8 @@ def compute_groups_matrix(groups, num_vars):
     if not groups:
         return None
 
+    num_vars = len(groups)
+    
     # Get a unique set of the group names
     unique_group_names = list(OrderedDict.fromkeys(groups))
     number_of_groups = len(unique_group_names)
