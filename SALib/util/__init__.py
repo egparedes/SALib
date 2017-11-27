@@ -102,14 +102,16 @@ def nonuniform_scale_samples(params, bounds, dists):
         # setting first and second arguments for distributions
         b1 = b[i][0]
         b2 = b[i][1]
-        if len(b[i]) == 2:
+        if 2 <= len(b[i]) <= 3:
             hard_b1 = -np.inf
             hard_b2 = np.inf
-        elif len(b[i]) == 4:
+        elif 4 <= len(b[i]) <= 5:
             hard_b1 = b[i][2] if b[i][2] is not None else -np.inf
             hard_b2 = b[i][3] if b[i][3] is not None else np.inf
         else:
             raise ValueError("Invalid bounds specification")
+
+        scale = b[i][-1] if len(b[i]) % 2 == 1 else None
 
         lower = 0.0
         upper = 1.0
@@ -139,7 +141,8 @@ def nonuniform_scale_samples(params, bounds, dists):
                     lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
                     upper = dist.cdf(hard_b2)
-                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
+                conv_params[:, i] = dist.ppf(
+                    params[:, i] * (upper - lower) + lower)
 
         # lognormal distribution (ln-space, not base-10)
         # parameters are ln-space mean and standard deviation
@@ -149,13 +152,13 @@ def nonuniform_scale_samples(params, bounds, dists):
                 raise ValueError(
                     '''Lognormal distribution: stdev must be > 0''')
             else:
-                dist = sp.stats.norm(loc=b1, scale=b2)
+                dist = sp.stats.lognorm(scale=np.exp(b1), s=b2)
                 if hard_b1 != -np.inf:
-                    lower = dist.cdf(np.log(hard_b1))
+                    lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
-                    upper = dist.cdf(np.log(hard_b2))
-                conv_params[:, i] = np.exp(
-                    dist.ppf(params[:, i] * (upper - lower) + lower))
+                    upper = dist.cdf(hard_b2)
+                conv_params[:, i] = dist.ppf(
+                    params[:, i] * (upper - lower) + lower)
 
         # isosceles triangular distribution
         # parameters are the location of the lower and upper bounds (peak=0.5%)
@@ -181,7 +184,8 @@ def nonuniform_scale_samples(params, bounds, dists):
                     lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
                     upper = dist.cdf(hard_b2)
-                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
+                conv_params[:, i] = dist.ppf(
+                    params[:, i] * (upper - lower) + lower)
 
         # weibull distribution
         # parameters are the shape and the scale of the distribution
@@ -199,13 +203,18 @@ def nonuniform_scale_samples(params, bounds, dists):
                     lower = dist.cdf(hard_b1)
                 if hard_b2 != np.inf:
                     upper = dist.cdf(hard_b2)
-                conv_params[:, i] = dist.ppf(params[:, i] * (upper - lower) + lower)
+                conv_params[:, i] = dist.ppf(
+                    params[:, i] * (upper - lower) + lower)
 
         else:
             valid_dists = ['unif', 'triang', 'norm', 'lognorm',
                            'isotriang', 'gumbel', 'weibull']
             raise ValueError('Distributions: choose one of %s' %
                              ", ".join(valid_dists))
+
+        if scale is not None:
+            conv_params[:, i] *= scale
+        assert np.isfinite(conv_params[:, i]).all()
 
     return conv_params
 
